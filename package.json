@@ -14,13 +14,18 @@
     "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
     "prepare": "npm run build",
     "watch": "tsc --watch",
-    "inspector": "npx @modelcontextprotocol/inspector build/index.js"
+    "inspector": "npx @modelcontextprotocol/inspector build/index.js",
+    "start:http": "tsc && node build/httpServer.js"
   },
   "dependencies": {
     "@doist/todoist-api-typescript": "^4.0.0-alpha.3",
-    "@modelcontextprotocol/sdk": "0.6.0",
+    "@modelcontextprotocol/sdk": "^1.16.0",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
     "axios": "^1.8.1",
-    "dotenv": "^16.4.7"
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^5.1.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.24",
