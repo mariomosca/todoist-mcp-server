@@ -1,14 +1,16 @@
 {
-  "name": "todoist-server",
-  "version": "0.1.0",
-  "description": "A server for interact with todoist service",
-  "private": true,
+  "name": "@mariomosca/todoist-mcp-server",
+  "version": "1.0.0",
+  "description": "Advanced MCP server for Todoist with completed tasks support via Sync API v9",
+  "private": false,
   "type": "module",
   "bin": {
-    "todoist-server": "./build/index.js"
+    "todoist-mcp-server": "./build/index.js"
   },
   "files": [
-    "build"
+    "build",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
@@ -17,6 +19,30 @@
     "inspector": "npx @modelcontextprotocol/inspector build/index.js",
     "start:http": "tsc && node build/httpServer.js"
   },
+  "keywords": [
+    "todoist",
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "ai",
+    "productivity",
+    "task-management",
+    "sync-api"
+  ],
+  "author": {
+    "name": "Mario Mosca",
+    "email": "info@mariomosca.com",
+    "url": "https://mariomosca.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mariomosca/todoist-mcp-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mariomosca/todoist-mcp-server/issues"
+  },
+  "homepage": "https://github.com/mariomosca/todoist-mcp-server#readme",
+  "license": "MIT",
   "dependencies": {
     "@doist/todoist-api-typescript": "^4.0.0-alpha.3",
     "@modelcontextprotocol/sdk": "^1.16.0",
@@ -30,5 +56,8 @@
   "devDependencies": {
     "@types/node": "^20.11.24",
     "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=16.0.0"
   }
 }
