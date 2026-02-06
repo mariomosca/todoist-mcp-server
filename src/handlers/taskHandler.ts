@@ -2,8 +2,9 @@
  * Handler per le operazioni sulle attività Todoist
  */
 import { getTodoistClient } from '../utils/todoistClient.js';
-import { TodoistTask, CreateTaskParams } from '../types/todoist.js';
+import { TodoistTask, TodoistCompletedTask, CreateTaskParams, UpdateTaskParams, MoveTaskParams, GetCompletedTasksParams } from '../types/todoist.js';
 import { logger } from '../index.js';
+import axios from 'axios';
 
 /**
  * Recupera tutte le attività dell'utente
@@ -166,15 +167,200 @@ export async function getTodayTasks(): Promise<TodoistTask[] | null> {
     // Filtro per le attività di oggi
     const filter = "today|overdue";
     const response = await todoistApi.getTasks({ filter });
-    
+
     // L'API Todoist potrebbe restituire un oggetto con 'results' o direttamente un array
-    const tasks = Array.isArray(response) ? response : 
+    const tasks = Array.isArray(response) ? response :
                  response && 'results' in response ? (response.results as any) : [];
-    
+
     logger.info(`Attività di oggi recuperate con successo: ${tasks.length} attività`);
     return tasks as TodoistTask[];
   } catch (error) {
     logger.error("Errore nel recupero delle attività di oggi:", error);
     return null;
   }
+}
+
+/**
+ * Aggiorna un'attività esistente
+ * @param taskId ID dell'attività da aggiornare
+ * @param params Parametri per l'aggiornamento
+ * @returns L'attività aggiornata o null in caso di errore
+ */
+export async function updateTask(taskId: string, params: UpdateTaskParams): Promise<TodoistTask | null> {
+  const todoistApi = getTodoistClient();
+  if (!todoistApi) {
+    logger.error("Todoist API non inizializzata. Controlla il token API.");
+    return null;
+  }
+
+  try {
+    // Rimuoviamo i parametri undefined per evitare problemi
+    const updateParams: any = {};
+    Object.keys(params).forEach(key => {
+      if (params[key as keyof UpdateTaskParams] !== undefined) {
+        updateParams[key] = params[key as keyof UpdateTaskParams];
+      }
+    });
+
+    const updatedTask = await todoistApi.updateTask(taskId, updateParams);
+    logger.info(`Attività ${taskId} aggiornata con successo`);
+    return updatedTask as unknown as TodoistTask;
+  } catch (error) {
+    logger.error(`Errore nell'aggiornamento dell'attività Todoist ${taskId}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Sposta un'attività in un progetto, sezione o come sotto-attività
+ * @param taskId ID dell'attività da spostare
+ * @param params Parametri per lo spostamento (projectId, sectionId, o parentId)
+ * @returns L'attività spostata o null in caso di errore
+ */
+export async function moveTask(taskId: string, params: MoveTaskParams): Promise<TodoistTask | null> {
+  const todoistApi = getTodoistClient();
+  if (!todoistApi) {
+    logger.error("Todoist API non inizializzata. Controlla il token API.");
+    return null;
+  }
+
+  try {
+    // L'API moveTasks richiede un array di ID, quindi passiamo un array con un solo elemento
+    const moveParams: any = {};
+    if (params.projectId) moveParams.projectId = params.projectId;
+    if (params.sectionId) moveParams.sectionId = params.sectionId;
+    if (params.parentId) moveParams.parentId = params.parentId;
+
+    const movedTasks = await todoistApi.moveTasks([taskId], moveParams);
+    const movedTask = movedTasks[0];
+
+    if (movedTask) {
+      logger.info(`Attività ${taskId} spostata con successo`);
+    }
+
+    return movedTask as unknown as TodoistTask;
+  } catch (error) {
+    logger.error(`Errore nello spostamento dell'attività Todoist ${taskId}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Riapre un'attività completata
+ * @param taskId ID dell'attività da riaprire
+ * @returns true se la riapertura è avvenuta con successo, false altrimenti
+ */
+export async function reopenTask(taskId: string): Promise<boolean> {
+  const todoistApi = getTodoistClient();
+  if (!todoistApi) {
+    logger.error("Todoist API non inizializzata. Controlla il token API.");
+    return false;
+  }
+
+  try {
+    await todoistApi.reopenTask(taskId);
+    logger.info(`Attività ${taskId} riaperta con successo`);
+    return true;
+  } catch (error) {
+    logger.error(`Errore nella riapertura dell'attività Todoist ${taskId}:`, error);
+    return false;
+  }
+}
+
+/**
+ * Recupera le attività completate in un intervallo di date
+ * @param params Parametri per il filtro (since, until, projectId, limit)
+ * @returns Array di attività completate o null in caso di errore
+ */
+export async function getCompletedTasks(params?: GetCompletedTasksParams): Promise<TodoistCompletedTask[] | null> {
+  const todoistApi = getTodoistClient();
+  if (!todoistApi) {
+    logger.error("Todoist API non inizializzata. Controlla il token API.");
+    return null;
+  }
+
+  try {
+    // Otteniamo il token API per fare la chiamata diretta alla Sync API
+    const token = process.env.TODOIST_API_TOKEN;
+    if (!token) {
+      logger.error("Token API non trovato");
+      return null;
+    }
+
+    // Costruiamo l'URL della Sync API per i task completati
+    const url = 'https://api.todoist.com/sync/v9/completed/get_all';
+
+    // Costruiamo i parametri per l'API
+    const apiParams: any = {};
+    if (params?.since) {
+      apiParams.since = params.since;
+    } else {
+      // Se non specificato, usiamo l'inizio di oggi come default
+      const now = new Date();
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+      apiParams.since = startOfDay.toISOString();
+    }
+    if (params?.until) {
+      apiParams.until = params.until;
+    }
+    if (params?.projectId) {
+      apiParams.project_id = params.projectId;
+    }
+    if (params?.limit) {
+      apiParams.limit = params.limit;
+    }
+
+    // Facciamo la chiamata direttamente alla Sync API
+    const response = await axios.get(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
+      params: apiParams
+    });
+
+    // La risposta ha una struttura: { items: [], projects: [] }
+    const tasks = response.data?.items || [];
+
+    logger.info(`Attività completate recuperate con successo: ${tasks.length} attività`);
+    return tasks as TodoistCompletedTask[];
+  } catch (error) {
+    logger.error("Errore nel recupero delle attività completate Todoist:", error);
+    return null;
+  }
+}
+
+/**
+ * Recupera le attività completate oggi
+ * @returns Array di attività completate oggi o null in caso di errore
+ */
+export async function getTodayCompletedTasks(): Promise<TodoistCompletedTask[] | null> {
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+  const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+
+  return getCompletedTasks({
+    since: startOfDay.toISOString(),
+    until: endOfDay.toISOString()
+  });
+}
+
+/**
+ * Recupera le attività completate questa settimana
+ * @returns Array di attività completate questa settimana o null in caso di errore
+ */
+export async function getWeekCompletedTasks(): Promise<TodoistCompletedTask[] | null> {
+  const now = new Date();
+  const dayOfWeek = now.getDay(); // 0 = domenica, 1 = lunedì, etc.
+  const startOfWeek = new Date(now);
+  startOfWeek.setDate(now.getDate() - dayOfWeek);
+  startOfWeek.setHours(0, 0, 0, 0);
+
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 6);
+  endOfWeek.setHours(23, 59, 59, 999);
+
+  return getCompletedTasks({
+    since: startOfWeek.toISOString(),
+    until: endOfWeek.toISOString()
+  });
 } 

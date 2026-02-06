@@ -10,7 +10,7 @@ import {
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import * as projectHandler from './projectHandler.js';
 import * as taskHandler from './taskHandler.js';
-import { CreateProjectParams, CreateTaskParams } from '../types/todoist.js';
+import { CreateProjectParams, CreateTaskParams, UpdateTaskParams, MoveTaskParams, GetCompletedTasksParams } from '../types/todoist.js';
 import { logger } from '../index.js';
 
 /**
@@ -361,6 +361,156 @@ export function setupHandlers(server: Server) {
             },
             required: ["taskId"]
           }
+        },
+
+        // Strumento per aggiornare un'attività
+        {
+          name: "update_todoist_task",
+          description: "Aggiorna un'attività esistente su Todoist (titolo, priorità, date, ecc.)",
+          inputSchema: {
+            type: "object",
+            properties: {
+              taskId: {
+                type: "string",
+                description: "ID dell'attività da aggiornare"
+              },
+              content: {
+                type: "string",
+                description: "Nuovo titolo dell'attività (opzionale)"
+              },
+              priority: {
+                type: "number",
+                description: "Nuova priorità dell'attività (1-4) (opzionale)"
+              },
+              dueString: {
+                type: "string",
+                description: "Nuova data scadenza in formato stringa (es. 'domani', 'fra 3 giorni') (opzionale)"
+              },
+              labels: {
+                type: "array",
+                items: {
+                  type: "string"
+                },
+                description: "Nuovi tag/labels per l'attività (opzionale)"
+              }
+            },
+            required: ["taskId"]
+          }
+        },
+
+        // Strumento per spostare un'attività
+        {
+          name: "move_todoist_task",
+          description: "Sposta un'attività in un progetto, sezione o come sotto-attività",
+          inputSchema: {
+            type: "object",
+            properties: {
+              taskId: {
+                type: "string",
+                description: "ID dell'attività da spostare"
+              },
+              projectId: {
+                type: "string",
+                description: "ID del progetto di destinazione (opzionale)"
+              },
+              sectionId: {
+                type: "string",
+                description: "ID della sezione di destinazione (opzionale)"
+              },
+              parentId: {
+                type: "string",
+                description: "ID del task genitore se si vuole creare una sotto-attività (opzionale)"
+              }
+            },
+            required: ["taskId"]
+          }
+        },
+
+        // Strumento per riaprire un'attività
+        {
+          name: "reopen_todoist_task",
+          description: "Riapre un'attività completata su Todoist",
+          inputSchema: {
+            type: "object",
+            properties: {
+              taskId: {
+                type: "string",
+                description: "ID dell'attività da riaprire"
+              }
+            },
+            required: ["taskId"]
+          }
+        },
+
+        // Strumento per recuperare le attività completate
+        {
+          name: "get_completed_tasks",
+          description: "Recupera le attività completate in un intervallo di date specifico",
+          inputSchema: {
+            type: "object",
+            properties: {
+              since: {
+                type: "string",
+                description: "Data di inizio in formato ISO 8601 (es. '2026-02-06T00:00:00Z')"
+              },
+              until: {
+                type: "string",
+                description: "Data di fine in formato ISO 8601 (es. '2026-02-06T23:59:59Z')"
+              },
+              projectId: {
+                type: "string",
+                description: "Filtra per ID progetto (opzionale)"
+              },
+              limit: {
+                type: "number",
+                description: "Numero massimo di risultati (opzionale)"
+              }
+            }
+          }
+        },
+
+        // Strumento per recuperare le attività completate oggi
+        {
+          name: "get_today_completed_tasks",
+          description: "Recupera tutte le attività completate oggi",
+          inputSchema: {
+            type: "object",
+            properties: {}
+          }
+        },
+
+        // Strumento per recuperare le attività completate questa settimana
+        {
+          name: "get_week_completed_tasks",
+          description: "Recupera tutte le attività completate questa settimana (da domenica a sabato)",
+          inputSchema: {
+            type: "object",
+            properties: {}
+          }
+        },
+
+        // Strumento per aggiornare un progetto
+        {
+          name: "update_todoist_project",
+          description: "Aggiorna un progetto esistente su Todoist (nome, colore, ecc.)",
+          inputSchema: {
+            type: "object",
+            properties: {
+              projectId: {
+                type: "string",
+                description: "ID del progetto da aggiornare"
+              },
+              name: {
+                type: "string",
+                description: "Nuovo nome del progetto (opzionale)"
+              },
+              color: {
+                type: "string",
+                description: "Nuovo colore del progetto (opzionale)"
+              }
+            },
+            required: ["projectId"]
+          }
         }
       ]
     };
@@ -501,7 +651,7 @@ export function setupHandlers(server: Server) {
       // Gestione eliminazione attività
       case "delete_todoist_task": {
         const taskId = String(request.params.arguments?.taskId);
-        
+
         if (!taskId) {
           throw new Error("L'ID dell'attività è obbligatorio");
         }
@@ -515,6 +665,186 @@ export function setupHandlers(server: Server) {
           content: [{
             type: "text",
             text: `Attività ${taskId} eliminata con successo`
+          }]
+        };
+      }
+
+      // Gestione aggiornamento attività
+      case "update_todoist_task": {
+        const taskId = String(request.params.arguments?.taskId);
+        const updateParams: UpdateTaskParams = {};
+
+        if (!taskId) {
+          throw new Error("L'ID dell'attività è obbligatorio");
+        }
+
+        // Aggiungiamo solo i parametri forniti
+        if (request.params.arguments?.content) {
+          updateParams.content = String(request.params.arguments.content);
+        }
+        if (request.params.arguments?.priority) {
+          updateParams.priority = Number(request.params.arguments.priority);
+        }
+        if (request.params.arguments?.dueString) {
+          updateParams.dueString = String(request.params.arguments.dueString);
+        }
+        if (request.params.arguments?.labels) {
+          updateParams.labels = request.params.arguments.labels as string[];
+        }
+
+        const updatedTask = await taskHandler.updateTask(taskId, updateParams);
+        if (!updatedTask) {
+          throw new Error(`Errore nell'aggiornamento dell'attività ${taskId}`);
+        }
+
+        return {
+          content: [{
+            type: "text",
+            text: `Attività ${taskId} aggiornata con successo: ${updatedTask.content}`
+          }]
+        };
+      }
+
+      // Gestione spostamento attività
+      case "move_todoist_task": {
+        const taskId = String(request.params.arguments?.taskId);
+        const moveParams: MoveTaskParams = {};
+
+        if (!taskId) {
+          throw new Error("L'ID dell'attività è obbligatorio");
+        }
+
+        // Aggiungiamo solo i parametri forniti (deve essere solo uno dei tre)
+        if (request.params.arguments?.projectId) {
+          moveParams.projectId = String(request.params.arguments.projectId);
+        }
+        if (request.params.arguments?.sectionId) {
+          moveParams.sectionId = String(request.params.arguments.sectionId);
+        }
+        if (request.params.arguments?.parentId) {
+          moveParams.parentId = String(request.params.arguments.parentId);
+        }
+
+        const movedTask = await taskHandler.moveTask(taskId, moveParams);
+        if (!movedTask) {
+          throw new Error(`Errore nello spostamento dell'attività ${taskId}`);
+        }
+
+        return {
+          content: [{
+            type: "text",
+            text: `Attività ${taskId} spostata con successo nel progetto ${movedTask.projectId}`
+          }]
+        };
+      }
+
+      // Gestione riapertura attività
+      case "reopen_todoist_task": {
+        const taskId = String(request.params.arguments?.taskId);
+
+        if (!taskId) {
+          throw new Error("L'ID dell'attività è obbligatorio");
+        }
+
+        const success = await taskHandler.reopenTask(taskId);
+        if (!success) {
+          throw new Error(`Errore nella riapertura dell'attività ${taskId}`);
+        }
+
+        return {
+          content: [{
+            type: "text",
+            text: `Attività ${taskId} riaperta con successo`
+          }]
+        };
+      }
+
+      // Gestione recupero attività completate con filtro
+      case "get_completed_tasks": {
+        const params: GetCompletedTasksParams = {};
+
+        if (request.params.arguments?.since) {
+          params.since = String(request.params.arguments.since);
+        }
+        if (request.params.arguments?.until) {
+          params.until = String(request.params.arguments.until);
+        }
+        if (request.params.arguments?.projectId) {
+          params.projectId = String(request.params.arguments.projectId);
+        }
+        if (request.params.arguments?.limit) {
+          params.limit = Number(request.params.arguments.limit);
+        }
+
+        const tasks = await taskHandler.getCompletedTasks(params);
+        if (!tasks) {
+          throw new Error("Errore nel recupero delle attività completate");
+        }
+
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify(tasks, null, 2)
+          }]
+        };
+      }
+
+      // Gestione recupero attività completate oggi
+      case "get_today_completed_tasks": {
+        const tasks = await taskHandler.getTodayCompletedTasks();
+        if (!tasks) {
+          throw new Error("Errore nel recupero delle attività completate oggi");
+        }
+
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify(tasks, null, 2)
+          }]
+        };
+      }
+
+      // Gestione recupero attività completate questa settimana
+      case "get_week_completed_tasks": {
+        const tasks = await taskHandler.getWeekCompletedTasks();
+        if (!tasks) {
+          throw new Error("Errore nel recupero delle attività completate questa settimana");
+        }
+
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify(tasks, null, 2)
+          }]
+        };
+      }
+
+      // Gestione aggiornamento progetto
+      case "update_todoist_project": {
+        const projectId = String(request.params.arguments?.projectId);
+        const updateParams: { name?: string; color?: string } = {};
+
+        if (!projectId) {
+          throw new Error("L'ID del progetto è obbligatorio");
+        }
+
+        // Aggiungiamo solo i parametri forniti
+        if (request.params.arguments?.name) {
+          updateParams.name = String(request.params.arguments.name);
+        }
+        if (request.params.arguments?.color) {
+          updateParams.color = String(request.params.arguments.color);
+        }
+
+        const updatedProject = await projectHandler.updateProject(projectId, updateParams);
+        if (!updatedProject) {
+          throw new Error(`Errore nell'aggiornamento del progetto ${projectId}`);
+        }
+
+        return {
+          content: [{
+            type: "text",
+            text: `Progetto ${projectId} aggiornato con successo: ${updatedProject.name}`
           }]
         };
       }
