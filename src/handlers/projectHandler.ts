@@ -2,7 +2,7 @@
  * Handler per le operazioni sui progetti Todoist
  */
 import { getTodoistClient } from '../utils/todoistClient.js';
-import { TodoistProject, CreateProjectParams } from '../types/todoist.js';
+import { TodoistProject, CreateProjectParams, UpdateTaskParams } from '../types/todoist.js';
 import { logger } from '../index.js';
 
 /**
@@ -90,5 +90,36 @@ export async function deleteProject(projectId: string): Promise<boolean> {
   } catch (error) {
     logger.error(`Errore nell'eliminazione del progetto Todoist ${projectId}:`, error);
     return false;
+  }
+}
+
+/**
+ * Aggiorna un progetto esistente
+ * @param projectId ID del progetto da aggiornare
+ * @param params Parametri per l'aggiornamento (name, color, ecc.)
+ * @returns Il progetto aggiornato o null in caso di errore
+ */
+export async function updateProject(projectId: string, params: { name?: string; color?: string; [key: string]: any }): Promise<TodoistProject | null> {
+  const todoistApi = getTodoistClient();
+  if (!todoistApi) {
+    logger.error("Todoist API non inizializzata. Controlla il token API.");
+    return null;
+  }
+
+  try {
+    // Rimuoviamo i parametri undefined per evitare problemi
+    const updateParams: any = {};
+    Object.keys(params).forEach(key => {
+      if (params[key] !== undefined) {
+        updateParams[key] = params[key];
+      }
+    });
+
+    const updatedProject = await todoistApi.updateProject(projectId, updateParams);
+    logger.info(`Progetto ${projectId} aggiornato con successo`);
+    return updatedProject as unknown as TodoistProject;
+  } catch (error) {
+    logger.error(`Errore nell'aggiornamento del progetto Todoist ${projectId}:`, error);
+    return null;
   }
 } 
