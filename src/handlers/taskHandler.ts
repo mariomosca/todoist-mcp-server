@@ -319,12 +319,51 @@ export async function getCompletedTasks(params?: GetCompletedTasksParams): Promi
     });
 
     // La risposta ha una struttura: { items: [], projects: [] }
-    const tasks = response.data?.items || [];
+    const items = response.data?.items || [];
+
+    // Trasformiamo i dati da snake_case a camelCase per compatibilità con l'interfaccia
+    const tasks: TodoistCompletedTask[] = items.map((item: any) => ({
+      id: item.id || item.task_id,
+      content: item.content,
+      completedAt: item.completed_at,
+      projectId: item.project_id || item.v2_project_id,
+      priority: item.priority,
+      taskId: item.task_id,
+      userId: item.user_id,
+      v2TaskId: item.v2_task_id,
+      v2ProjectId: item.v2_project_id,
+      v2SectionId: item.v2_section_id,
+      sectionId: item.section_id,
+      noteCount: item.note_count,
+      notes: item.notes,
+      // Manteniamo anche i campi originali per retrocompatibilità
+      ...item
+    }));
 
     logger.info(`Attività completate recuperate con successo: ${tasks.length} attività`);
-    return tasks as TodoistCompletedTask[];
-  } catch (error) {
-    logger.error("Errore nel recupero delle attività completate Todoist:", error);
+    return tasks;
+  } catch (error: any) {
+    // Log dettagliato per errori axios
+    if (error.response) {
+      // Il server ha risposto con uno status code fuori dal range 2xx
+      logger.error("Errore nel recupero delle attività completate Todoist - Response error:", {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        data: error.response.data,
+        headers: error.response.headers
+      });
+    } else if (error.request) {
+      // La richiesta è stata fatta ma non c'è stata risposta
+      logger.error("Errore nel recupero delle attività completate Todoist - No response:", {
+        request: error.request
+      });
+    } else {
+      // Errore nella configurazione della richiesta
+      logger.error("Errore nel recupero delle attività completate Todoist - Request setup:", {
+        message: error.message,
+        error: error
+      });
+    }
     return null;
   }
 }
