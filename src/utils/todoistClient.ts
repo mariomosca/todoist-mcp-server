@@ -9,6 +9,7 @@ dotenv.config();
 
 // Inizializza l'API Todoist con il token
 let todoistApi: TodoistApi | null = null;
+let storedApiToken: string | null = null;
 
 /**
  * Inizializza il client Todoist
@@ -21,6 +22,7 @@ export function initTodoistClient(tokenOverride?: string): TodoistApi | null {
     console.error("TODOIST_API_TOKEN non trovato nelle variabili d'ambiente. La funzionalità Todoist sarà disabilitata.");
     return null;
   }
+  storedApiToken = apiToken;
   todoistApi = new TodoistApi(apiToken);
   return todoistApi;
 }
@@ -38,4 +40,12 @@ export function getTodoistClient(tokenOverride?: string): TodoistApi | null {
     return initTodoistClient();
   }
   return todoistApi;
-} 
+}
+
+/**
+ * Ottiene il token API memorizzato
+ * @returns Il token API o null se non inizializzato
+ */
+export function getApiToken(): string | null {
+  return storedApiToken;
+}

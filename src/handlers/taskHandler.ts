@@ -1,7 +1,7 @@
 /**
  * Handler per le operazioni sulle attività Todoist
  */
-import { getTodoistClient } from '../utils/todoistClient.js';
+import { getTodoistClient, getApiToken } from '../utils/todoistClient.js';
 import { TodoistTask, TodoistCompletedTask, CreateTaskParams, UpdateTaskParams, MoveTaskParams, GetCompletedTasksParams } from '../types/todoist.js';
 import { logger } from '../index.js';
 import axios from 'axios';
@@ -281,9 +281,9 @@ export async function getCompletedTasks(params?: GetCompletedTasksParams): Promi
 
   try {
     // Otteniamo il token API per fare la chiamata diretta alla Sync API
-    const token = process.env.TODOIST_API_TOKEN;
+    const token = getApiToken();
     if (!token) {
-      logger.error("Token API non trovato");
+      logger.error("Token API non trovato. Assicurati che il client sia inizializzato con --token");
       return null;
     }
 
