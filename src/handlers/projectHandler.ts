@@ -2,7 +2,7 @@
  * Handler per le operazioni sui progetti Todoist
  */
 import { getTodoistClient } from '../utils/todoistClient.js';
-import { TodoistProject, CreateProjectParams, UpdateTaskParams } from '../types/todoist.js';
+import { TodoistProject, CreateProjectParams } from '../types/todoist.js';
 import { logger } from '../index.js';
 
 /**
@@ -18,12 +18,10 @@ export async function getProjects(): Promise<TodoistProject[] | null> {
 
   try {
     const response = await todoistApi.getProjects();
-    // L'API Todoist potrebbe restituire un oggetto con 'results' o direttamente un array
-    const projects = Array.isArray(response) ? response : 
-                    response && 'results' in response ? (response.results as any) : [];
-    
+    const projects = response.results || [];
+
     logger.info(`Progetti recuperati con successo: ${projects.length} progetti`);
-    return projects as TodoistProject[];
+    return projects as unknown as TodoistProject[];
   } catch (error) {
     logger.error("Errore nel recupero dei progetti Todoist:", error);
     return null;

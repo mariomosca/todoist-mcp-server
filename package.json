@@ -1,7 +1,7 @@
 {
   "name": "@mindfullabai/todoist-mcp-server",
-  "version": "1.0.0",
-  "description": "Advanced MCP server for Todoist with completed tasks support via Sync API v9",
+  "version": "2.0.0",
+  "description": "Advanced MCP server for Todoist using Unified API v1",
   "private": false,
   "type": "module",
   "bin": {
@@ -27,7 +27,7 @@
     "ai",
     "productivity",
     "task-management",
-    "sync-api"
+    "api-v1"
   ],
   "author": {
     "name": "mindfullabai",
@@ -43,11 +43,10 @@
   "homepage": "https://github.com/mariomosca/todoist-mcp-server#readme",
   "license": "MIT",
   "dependencies": {
-    "@doist/todoist-api-typescript": "^4.0.0-alpha.3",
+    "@doist/todoist-api-typescript": "^6.4.1",
     "@modelcontextprotocol/sdk": "^1.16.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
-    "axios": "^1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^5.1.0"
@@ -57,6 +56,6 @@
     "typescript": "^5.3.3"
   },
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=20.0.0"
   }
 }

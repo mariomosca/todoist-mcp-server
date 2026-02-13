@@ -1,10 +1,9 @@
 /**
  * Handler per le operazioni sulle attività Todoist
  */
-import { getTodoistClient, getApiToken } from '../utils/todoistClient.js';
+import { getTodoistClient } from '../utils/todoistClient.js';
 import { TodoistTask, TodoistCompletedTask, CreateTaskParams, UpdateTaskParams, MoveTaskParams, GetCompletedTasksParams } from '../types/todoist.js';
 import { logger } from '../index.js';
-import axios from 'axios';
 
 /**
  * Recupera tutte le attività dell'utente
@@ -19,12 +18,10 @@ export async function getTasks(): Promise<TodoistTask[] | null> {
 
   try {
     const response = await todoistApi.getTasks();
-    // L'API Todoist potrebbe restituire un oggetto con 'results' o direttamente un array
-    const tasks = Array.isArray(response) ? response : 
-                 response && 'results' in response ? (response.results as any) : [];
-    
+    const tasks = response.results || [];
+
     logger.info(`Attività recuperate con successo: ${tasks.length} attività`);
-    return tasks as TodoistTask[];
+    return tasks as unknown as TodoistTask[];
   } catch (error) {
     logger.error("Errore nel recupero delle attività Todoist:", error);
     return null;
@@ -45,12 +42,10 @@ export async function getTasksByProject(projectId: string): Promise<TodoistTask[
 
   try {
     const response = await todoistApi.getTasks({ projectId });
-    // L'API Todoist potrebbe restituire un oggetto con 'results' o direttamente un array
-    const tasks = Array.isArray(response) ? response : 
-                 response && 'results' in response ? (response.results as any) : [];
-    
+    const tasks = response.results || [];
+
     logger.info(`Attività del progetto ${projectId} recuperate con successo: ${tasks.length} attività`);
-    return tasks as TodoistTask[];
+    return tasks as unknown as TodoistTask[];
   } catch (error) {
     logger.error(`Errore nel recupero delle attività del progetto ${projectId}:`, error);
     return null;
@@ -164,16 +159,11 @@ export async function getTodayTasks(): Promise<TodoistTask[] | null> {
   }
 
   try {
-    // Filtro per le attività di oggi
-    const filter = "today|overdue";
-    const response = await todoistApi.getTasks({ filter });
-
-    // L'API Todoist potrebbe restituire un oggetto con 'results' o direttamente un array
-    const tasks = Array.isArray(response) ? response :
-                 response && 'results' in response ? (response.results as any) : [];
+    const response = await todoistApi.getTasksByFilter({ query: "today|overdue" });
+    const tasks = response.results || [];
 
     logger.info(`Attività di oggi recuperate con successo: ${tasks.length} attività`);
-    return tasks as TodoistTask[];
+    return tasks as unknown as TodoistTask[];
   } catch (error) {
     logger.error("Errore nel recupero delle attività di oggi:", error);
     return null;
@@ -225,19 +215,13 @@ export async function moveTask(taskId: string, params: MoveTaskParams): Promise<
   }
 
   try {
-    // L'API moveTasks richiede un array di ID, quindi passiamo un array con un solo elemento
     const moveParams: any = {};
     if (params.projectId) moveParams.projectId = params.projectId;
     if (params.sectionId) moveParams.sectionId = params.sectionId;
     if (params.parentId) moveParams.parentId = params.parentId;
 
-    const movedTasks = await todoistApi.moveTasks([taskId], moveParams);
-    const movedTask = movedTasks[0];
-
-    if (movedTask) {
-      logger.info(`Attività ${taskId} spostata con successo`);
-    }
-
+    const movedTask = await todoistApi.moveTask(taskId, moveParams);
+    logger.info(`Attività ${taskId} spostata con successo`);
     return movedTask as unknown as TodoistTask;
   } catch (error) {
     logger.error(`Errore nello spostamento dell'attività Todoist ${taskId}:`, error);
@@ -280,90 +264,47 @@ export async function getCompletedTasks(params?: GetCompletedTasksParams): Promi
   }
 
   try {
-    // Otteniamo il token API per fare la chiamata diretta alla Sync API
-    const token = getApiToken();
-    if (!token) {
-      logger.error("Token API non trovato. Assicurati che il client sia inizializzato con --token");
-      return null;
-    }
+    // Calcoliamo since/until se non forniti
+    let since = params?.since;
+    let until = params?.until;
 
-    // Costruiamo l'URL della Sync API per i task completati
-    const url = 'https://api.todoist.com/sync/v9/completed/get_all';
-
-    // Costruiamo i parametri per l'API
-    const apiParams: any = {};
-    if (params?.since) {
-      apiParams.since = params.since;
-    } else {
-      // Se non specificato, usiamo l'inizio di oggi come default
+    if (!since) {
       const now = new Date();
       const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-      apiParams.since = startOfDay.toISOString();
+      since = startOfDay.toISOString();
     }
-    if (params?.until) {
-      apiParams.until = params.until;
-    }
-    if (params?.projectId) {
-      apiParams.project_id = params.projectId;
-    }
-    if (params?.limit) {
-      apiParams.limit = params.limit;
+    if (!until) {
+      const now = new Date();
+      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+      until = endOfDay.toISOString();
     }
 
-    // Facciamo la chiamata direttamente alla Sync API
-    const response = await axios.get(url, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      },
-      params: apiParams
-    });
+    // Usiamo il metodo nativo del SDK v6 per l'API v1
+    const apiArgs: any = { since, until };
+    if (params?.projectId) apiArgs.projectId = params.projectId;
+    if (params?.limit) apiArgs.limit = params.limit;
 
-    // La risposta ha una struttura: { items: [], projects: [] }
-    const items = response.data?.items || [];
+    const response = await todoistApi.getCompletedTasksByCompletionDate(apiArgs);
+    const items = response.items || [];
 
-    // Trasformiamo i dati da snake_case a camelCase per compatibilità con l'interfaccia
+    // Mappiamo alla nostra interfaccia TodoistCompletedTask
     const tasks: TodoistCompletedTask[] = items.map((item: any) => ({
-      id: item.id || item.task_id,
+      id: item.id,
       content: item.content,
-      completedAt: item.completed_at,
-      projectId: item.project_id || item.v2_project_id,
+      completedAt: item.completedAt,
+      projectId: item.projectId,
       priority: item.priority,
-      taskId: item.task_id,
-      userId: item.user_id,
-      v2TaskId: item.v2_task_id,
-      v2ProjectId: item.v2_project_id,
-      v2SectionId: item.v2_section_id,
-      sectionId: item.section_id,
-      noteCount: item.note_count,
-      notes: item.notes,
-      // Manteniamo anche i campi originali per retrocompatibilità
+      labels: item.labels,
       ...item
     }));
 
     logger.info(`Attività completate recuperate con successo: ${tasks.length} attività`);
     return tasks;
   } catch (error: any) {
-    // Log dettagliato per errori axios
-    if (error.response) {
-      // Il server ha risposto con uno status code fuori dal range 2xx
-      logger.error("Errore nel recupero delle attività completate Todoist - Response error:", {
-        status: error.response.status,
-        statusText: error.response.statusText,
-        data: error.response.data,
-        headers: error.response.headers
-      });
-    } else if (error.request) {
-      // La richiesta è stata fatta ma non c'è stata risposta
-      logger.error("Errore nel recupero delle attività completate Todoist - No response:", {
-        request: error.request
-      });
-    } else {
-      // Errore nella configurazione della richiesta
-      logger.error("Errore nel recupero delle attività completate Todoist - Request setup:", {
-        message: error.message,
-        error: error
-      });
-    }
+    logger.error("Errore nel recupero delle attività completate Todoist:", {
+      message: error.message,
+      error
+    });
     return null;
   }
 }
